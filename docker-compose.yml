@@ -1,0 +1,61 @@
+services:
+  falco-driver-loader:
+    image: falcosecurity/falco-driver-loader
+    container_name: falco-driver-loader
+    privileged: true
+    volumes:
+      - /root/.falco:/root/.falco
+      - /host/lib/modules:/host/lib/modules:ro
+      - /host/usr/src:/host/usr/src:ro
+      - /host/dev:/host/dev
+    command: ["/usr/bin/falco-driver-loader"]
+  falco:
+    image: falcosecurity/falco:latest
+    container_name: falco
+    privileged: true
+    depends_on:
+      falco-driver-loader:
+        condition: service_completed_successfully
+    volumes:
+      - /var/run/docker.sock:/host/var/run/docker.sock
+      - /sys/kernel/tracing:/sys/kernel/tracing:ro
+      - /dev:/host/dev
+      - /etc:/host/etc:ro
+      - /proc:/host/proc:ro
+      - /boot:/host/boot:ro
+      - /lib/modules:/host/lib/modules:ro
+      - /usr:/host/usr:ro
+      - ./falco/falco.yaml:/etc/falco/falco.yaml
+      - ./falco/rules/:/etc/falco/rules.d/
+    logging:
+      # 使用 fluentd 日志驱动
+      driver: "fluentd"
+      options:
+        # 将日志发送到 fluentd 服务的 24224 端口
+        fluentd-address: localhost:24224
+        # 为所有来自这个容器的日志打上 'falco' 标签
+        tag: falco
+  fluentd:
+    # 我们需要构建一个自定义镜像来安装 prometheus 插件
+    build:
+      context: ./fluentd
+      dockerfile: Dockerfile
+    container_name: fluentd
+    depends_on:
+      - falco
+    volumes:
+      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf
+    ports:
+      # fluentd 日志输入端口
+      - "24224:24224"
+      # prometheus 指标暴露端口
+      - "24231:24231"
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - fluentd

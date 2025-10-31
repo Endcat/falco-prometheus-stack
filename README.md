@@ -1,0 +1,1 @@
+1. prometheus和exporter在同一网络下

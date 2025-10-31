@@ -1,0 +1,70 @@
+- rule: process
+  desc: process
+  condition: evt.category=process and proc.name != "<NA>"
+  output: >
+    evt.num=%evt.num
+    evt.type=%evt.type
+    container.id=%container.id
+    container.name=%container.name
+    container.image.repository=%container.image.repository
+    proc.pid=%proc.pid
+    proc.ppid=%proc.ppid
+    proc.pname=%proc.pname
+    proc.name=%proc.name
+    proc.cmdline=%proc.cmdline
+    proc.args=%proc.args
+    proc.exepath=%proc.exepath
+    fd.num=%fd.num
+    fd.type=%fd.type
+    fd.name=%fd.name
+    evt.args=[%evt.args]
+  priority: DEBUG
+  source: syscall
+  enabled: true
+
+- rule: net
+  desc: net
+  condition: evt.category=net and proc.name != "<NA>"
+  output: >
+    evt.num=%evt.num
+    evt.type=%evt.type
+    container.id=%container.id
+    container.name=%container.name
+    container.image.repository=%container.image.repository
+    proc.pname=%proc.pname
+    proc.name=%proc.name
+    proc.cmdline=%proc.cmdline
+    proc.exepath=%proc.exepath
+    fd.typechar=%fd.typechar
+    fd.num=%fd.num
+    fd.type=%fd.type
+    fd.name=%fd.name
+    evt.args=[%evt.args]
+  priority: DEBUG
+  source: syscall
+  enabled: true
+
+- rule: file
+  desc: file
+  condition: evt.category=file and proc.name != "<NA>"
+  output: >
+    evt.num=%evt.num
+    evt.type=%evt.type
+    container.id=%container.id
+    container.name=%container.name
+    container.image.repository=%container.image.repository
+    proc.pid=%proc.pid
+    proc.ppid=%proc.ppid
+    proc.pname=%proc.pname
+    proc.name=%proc.name
+    proc.cmdline=%proc.cmdline
+    proc.exepath=%proc.exepath
+    fd.num=%fd.num
+    fd.type=%fd.type
+    fd.name=%fd.name
+    fd.filename=%fd.filename
+    fd.directory=%fd.directory
+    evt.args=[%evt.args]
+  priority: DEBUG
+  source: syscall
+  enabled: true
