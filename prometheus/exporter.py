@@ -17,7 +17,7 @@ logging.basicConfig(
 
 # 定义事件计数器的标签。这是我们查询数据的维度。
 EVENT_LABELS = [
-    'hostname', 'event_type', 'rule', 'priority', 'container_name', 
+    'rule', 'priority', 'container_name', 
     'image_repository', 'process_name', 'k8s_namespace', 'k8s_pod'
 ]
 SYSCALL_EVENTS = Counter('syscall_events_total', 'Total number of syscall events observed.', EVENT_LABELS)
@@ -26,7 +26,7 @@ SYSCALL_EVENTS = Counter('syscall_events_total', 'Total number of syscall events
 LAST_EVENT_TIMESTAMP = Gauge(
     'syscall_last_event_timestamp_nanoseconds',
     'Timestamp (nanoseconds) of the last processed syscall event.',
-    ['hostname']
+    ['container_name']
 )
 
 # --- 3. 处理事件数据的函数 ---
@@ -38,8 +38,6 @@ def process_event(event_data):
         output_fields = event_data.get('output_fields', {})
         
         # 提取标签值，为缺失的值提供默认 'unknown'
-        hostname = event_data.get('hostname', 'unknown')
-        event_type = output_fields.get('evt.type', 'unknown')
         rule = event_data.get('rule', 'unknown')
         priority = event_data.get('priority', 'unknown')
         container_name = output_fields.get('container.name', 'unknown')
@@ -54,8 +52,6 @@ def process_event(event_data):
         
         # 增加计数器
         SYSCALL_EVENTS.labels(
-            hostname=hostname,
-            event_type=event_type,
             rule=rule,
             priority=priority,
             container_name=container_name,
@@ -68,9 +64,9 @@ def process_event(event_data):
         # 更新最新时间戳
         event_timestamp = output_fields.get('evt.time.iso8601')
         if event_timestamp and isinstance(event_timestamp, int):
-            LAST_EVENT_TIMESTAMP.labels(hostname=hostname).set(event_timestamp)
+            LAST_EVENT_TIMESTAMP.labels(container_name=container_name).set(event_timestamp)
 
-        logging.info(f"Processed event from host: {hostname}, type: {event_type}, rule: {rule}")
+        logging.info(f"Processed event from container: {container_name}, rule: {rule}")
 
     except Exception as e:
         logging.error(f"Error processing event: {e}\nData: {event_data}")
