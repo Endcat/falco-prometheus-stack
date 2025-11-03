@@ -1,0 +1,83 @@
+{
+    "hostname": "456d9d9a0c21",
+    "output_fields": {
+        "container.id": "host",
+        "container.image.repository": "",
+        "container.image.tag": "",
+        "container.name": "host",
+        "evt.args": "res=0 fd=8(<f>/sys/fs/cgroup/docker/2cde3dcbeff2e24bd99d4f46fb83e22a844369e3aabb33afc052f1bd44a47a3a/cgroup.freeze)",
+        "evt.num": 298734841,
+        "evt.time.iso8601": 1762093359178045148,
+        "evt.type": "close",
+        "fd.directory": "/sys/fs/cgroup/docker/2cde3dcbeff2e24bd99d4f46fb83e22a844369e3aabb33afc052f1bd44a47a3a",
+        "fd.filename": "cgroup.freeze",
+        "fd.name": "/sys/fs/cgroup/docker/2cde3dcbeff2e24bd99d4f46fb83e22a844369e3aabb33afc052f1bd44a47a3a/cgroup.freeze",
+        "fd.num": 8,
+        "fd.type": "file",
+        "proc.cmdline": ".runc --root /var/run/docker/runtime-runc/moby --log /var/run/docker/containerd/daemon/io.containerd.runtime.v2.task/moby/2cde3dcbeff2e24bd99d4f46fb83e22a844369e3aabb33afc052f1bd44a47a3a/log.json --log-format json exec --process /realtmp/runc-process2370699350 --detach --pid-file /var/run/docker/containerd/daemon/io.containerd.runtime.v2.task/moby/2cde3dcbeff2e24bd99d4f46fb83e22a844369e3aabb33afc052f1bd44a47a3a/1f4dfcd2a57dc963ab45f9a62d314cbf850b3cf6a8f3a69a776511f31b8c369a.pid 2cde3dcbeff2e24bd99d4f46fb83e22a844369e3aabb33afc052f1bd44a47a3a",
+        "proc.exepath": "memfd:runc",
+        "proc.name": ".runc",
+        "proc.pid": 512491,
+        "proc.pname": null,
+        "proc.ppid": null
+    },
+    "priority": "Debug",
+    "rule": "file",
+    "source": "syscall",
+    "tags": [],
+    "time": "2025-11-02T14:22:39.178045148Z"
+}
+{
+    "hostname": "456d9d9a0c21",
+    "output_fields": {
+        "": "",
+        "container.id": "host",
+        "container.image.repository": "",
+        "container.image.tag": "",
+        "container.name": "host",
+        "evt.args": "res=0 option=1 arg2_str=<NA> arg2_int=9",
+        "evt.num": 299850211,
+        "evt.time.iso8601": 1762093509914562861,
+        "evt.type": "prctl",
+        "fd.name": null,
+        "fd.num": null,
+        "fd.type": null,
+        "proc.cmdline": "containerd-shim -namespace moby -id 2cde3dcbeff2e24bd99d4f46fb83e22a844369e3aabb33afc052f1bd44a47a3a -address /var/run/docker/containerd/containerd.sock",
+        "proc.exepath": "",
+        "proc.name": "containerd-shim",
+        "proc.pid": 512876,
+        "proc.pname": null,
+        "proc.ppid": null
+    },
+    "priority": "Debug",
+    "rule": "process",
+    "source": "syscall",
+    "tags": [],
+    "time": "2025-11-02T14:25:09.914562861Z"
+}
+{
+    "hostname": "456d9d9a0c21",
+    "output_fields": {
+        "container.id": "2cde3dcbeff2",
+        "container.image.repository": "mysql",
+        "container.image.tag": "8",
+        "container.name": "gemini-balance-mysql",
+        "evt.args": "res=0 fd=3(<4t>127.0.0.1:46130->127.0.0.1:3306) how=2(SHUT_RDWR)",
+        "evt.num": 301152482,
+        "evt.time.iso8601": 1762093680810065713,
+        "evt.type": "shutdown",
+        "fd.name": "127.0.0.1:46130->127.0.0.1:3306",
+        "fd.num": 3,
+        "fd.type": "ipv4",
+        "fd.typechar": "4",
+        "proc.cmdline": "mysqladmin ping -h 127.0.0.1",
+        "proc.exepath": "/usr/bin/mysqladmin",
+        "proc.name": "mysqladmin",
+        "proc.pname": null
+    },
+    "priority": "Debug",
+    "rule": "net",
+    "source": "syscall",
+    "tags": [],
+    "time": "2025-11-02T14:28:00.810065713Z"
+}
