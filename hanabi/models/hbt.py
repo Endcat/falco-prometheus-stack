@@ -4,10 +4,7 @@
 # system call events and other relevant metrics.
 
 from typing import List, Dict, Any
-
-# 进程分支路线：
-# 网络分支路线：
-# 文件分支路线：
+from .hbt_builder import HBTBuilder
 
 
 # 一个容器对应一个 HBT 模型
@@ -16,26 +13,19 @@ from typing import List, Dict, Any
 class HBTModel:
     def __init__(self, container_id: str):
         self.container_id = container_id
-        self.root = {
-            "process_branch": {},
-            "network_branch": {},
-            "file_branch": {}
-        }
+        self.hbt_builder = HBTBuilder(container_id)
 
     def add_process_event(self, event: Dict[str, Any]):
         # 处理进程相关事件，更新 process_branch
-        pass
+        self.hbt_builder.add_event({"rule": "process", "output_fields": event})
 
     def add_network_event(self, event: Dict[str, Any]):
         # 处理网络相关事件，更新 network_branch
-        pass
+        self.hbt_builder.add_event({"rule": "network", "output_fields": event})
 
     def add_file_event(self, event: Dict[str, Any]):
         # 处理文件相关事件，更新 file_branch
-        pass
+        self.hbt_builder.add_event({"rule": "file", "output_fields": event})
 
     def get_model(self) -> Dict[str, Any]:
-        return {
-            "container_id": self.container_id,
-            "hbt_structure": self.root
-        }
+        return self.hbt_builder.get_model()
