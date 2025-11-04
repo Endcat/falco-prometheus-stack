@@ -73,7 +73,7 @@ class DockerLogQueue:
                             self.queue.put(json_obj)
                         except json.JSONDecodeError as e:
                             self.error_count += 1
-                            print(f"⚠️  Invalid JSON on line {self.line_count}: {e}", file=sys.stderr)
+                            print(f"Invalid JSON on line {self.line_count}: {e}", file=sys.stderr)
         except Exception as e:
             if not self.stop_event.is_set():
                 print(f"❌ Error in log streaming: {e}", file=sys.stderr)

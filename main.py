@@ -33,12 +33,8 @@ def print_tree(node: TreeNode, tree: Tree = None, level: int = 0) -> Tree:
     return tree
 
 def main():
-    print("before DockerLogQueue")
     log_queue = DockerLogQueue(container_name="falco")
-    print("after DockerLogQueue")
-    print("before log_queue.start()")
     log_queue.start()
-    print("after log_queue.start()")
 
     print("before HBTModel")
     # 创建HBT模型实例
@@ -52,28 +48,22 @@ def main():
     try:
         cnt = 0
         while True:
-            print("cnt:", cnt)
-            cnt += 1
             json_obj = log_queue.get(timeout=1)
             if json_obj:
-                # 打印原始事件
-                #print("Raw event:")
-                #print(json.dumps(json_obj, ensure_ascii=False))
-                
+                cnt += 1
+                print("cnt:", cnt)
                 # 解析事件并添加到HBT模型
                 output_fields = event_parser.extract_output_fields(json_obj)
                 category = event_parser.categorize_event(json_obj)
                 
                 if category == "process":
-                    print("--------- process event\n")
+                    print("process log")
                     hbt_model.add_process_event(output_fields)
                 elif category == "network":
-                    print("--------- network event\n")
-                    #print("--------- Raw event:\n")
-                    #print(json.dumps(json_obj, ensure_ascii=False))
+                    print("network log")
                     hbt_model.add_network_event(output_fields)
                 elif category == "file":
-                    print("--------- file event\n")
+                    print("file log")
                     hbt_model.add_file_event(output_fields)
 
                     
@@ -117,6 +107,4 @@ def get_model_statistics(hbt_model):
 
 
 if __name__ == "__main__":
-    print("before main")
     main()
-    print("after main")

@@ -12,10 +12,13 @@ def update_learn_state(eventCounter: EventCounter):
     根据事件速率和时间窗口更新learnState
     """
     global learnState
+    print("update_learn_state called, learning")  # Debugging line
     now = int(time.time() * 1000)
     earliest_time = eventCounter.timestamps[0] if eventCounter.timestamps else now
-    if now - earliest_time >= 1000:
-        if eventCounter.get_rate() <= 10: #每秒事件数小于10
+    print("eventCounter.get_rate():", eventCounter.get_rate())
+    print("now - earliest_time:", now - earliest_time)
+    if now - earliest_time >= 1000 * 10:
+        if eventCounter.get_rate() <= 10: # 每10秒事件数小于10
             learnState = False
     eventCounter.on_event()
 
@@ -52,10 +55,11 @@ class ProcessBranchHandler(BranchHandler):
             event: 进程事件数据
         """
         if learnState == False:
+            print("handle_event called with learnState=False")  # Debugging line
             evt_type = event.get("evt.type", "")
             proc_name = event.get("proc.name", "unknown")
             if evt_type not in self.root.children:
-                print("Warning(T):    " + json.dumps(event, ensure_ascii=False)+"\n")
+                print("warning(T):    " + json.dumps(event, ensure_ascii=False)+"\n")
             elif proc_name not in self.root.children[evt_type].children:
                 print("Warning(T):    " + json.dumps(event, ensure_ascii=False)+"\n")
             else:
@@ -98,6 +102,7 @@ class NetworkBranchHandler(BranchHandler):
             event: 网络事件数据
         """
         if learnState == False:
+            print("handle_event called with learnState=False")  # Debugging line
             evt_type = event.get("evt.type", "")
             proc_name = event.get("proc.name", "unknown")
             if evt_type not in self.root.children:
@@ -107,7 +112,14 @@ class NetworkBranchHandler(BranchHandler):
             else:
                 protocol = event.get("fd.type", "")
                 str = event.get("fd.name", "")
-                left, right = str.split("->")
+                # 检查 fd.name 是否为 None 或空字符串
+                if not str:
+                    return
+                # 检查是否包含 "->" 分隔符
+                if "->" not in str:
+                    right = ":"
+                else:
+                    _ , right = str.split("->")
                 value = right + ":" + protocol
                 if value not in self.root.children[evt_type].children[proc_name].children:
                     print("Warning(T): " + json.dumps(event, ensure_ascii=False)+"\n")
@@ -127,6 +139,9 @@ class NetworkBranchHandler(BranchHandler):
         # 获取Attribute Token Bag级别的节点，在网络中就是ip、port、protocol等
         protocol = event.get("fd.type", "")
         str = event.get("fd.name", "")
+        # 检查 fd.name 是否为 None 或空字符串
+        if not str:
+            return
         if "->" not in str:
             right = ":"
         else:
@@ -151,6 +166,7 @@ class FileBranchHandler(BranchHandler):
             event: 文件事件数据
         """
         if learnState == False:
+            print("handle_event called with learnState=False")  # Debugging line
             evt_type = event.get("evt.type", "")
             proc_name = event.get("proc.name", "unknown")
             if evt_type not in self.root.children:
