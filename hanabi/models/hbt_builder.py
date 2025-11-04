@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 from .tree_node import TreeNode
 from .branch_handlers import ProcessBranchHandler, NetworkBranchHandler, FileBranchHandler
 from .event_parser import EventParser
+from ..utils.timeCount import EventCounter
 
 
 class HBTBuilder:
@@ -23,6 +24,7 @@ class HBTBuilder:
         self.file_branch = self.root.add_child("file_branch", "branch")
         
         # 初始化分支处理器
+        self.eventCounter = EventCounter()
         self.process_handler = ProcessBranchHandler(self.process_branch)
         self.network_handler = NetworkBranchHandler(self.network_branch)
         self.file_handler = FileBranchHandler(self.file_branch)
@@ -45,11 +47,11 @@ class HBTBuilder:
         
         # 根据分类将事件发送到相应的处理器
         if category == "process":
-            self.process_handler.handle_event(output_fields)
+            self.process_handler.handle_event(output_fields,self.eventCounter)
         elif category == "network":
-            self.network_handler.handle_event(output_fields)
+            self.network_handler.handle_event(output_fields,self.eventCounter)
         elif category == "file":
-            self.file_handler.handle_event(output_fields)
+            self.file_handler.handle_event(output_fields,self.eventCounter)
         # 忽略未知类型的事件
     
     def add_events(self, events: List[Dict[str, Any]]):
