@@ -12,15 +12,13 @@ def update_learn_state(eventCounter: EventCounter):
     根据事件速率和时间窗口更新learnState
     """
     global learnState
-    print("update_learn_state called, learning")  # Debugging line
     now = int(time.time() * 1000)
     earliest_time = eventCounter.timestamps[0] if eventCounter.timestamps else now
-    print("eventCounter.get_rate():", eventCounter.get_rate())
-    print("now - earliest_time:", now - earliest_time)
+    print("training, eventCounter.get_rate():", eventCounter.get_rate())
+    print("time window:", now - earliest_time)
     if now - earliest_time >= 1000 * 10:
-        if eventCounter.get_rate() <= 10: # 每10秒事件数小于10
+        if eventCounter.get_rate() <= 10: # <=10个事件/10秒
             learnState = False
-    eventCounter.on_event()
 
 class BranchHandler:
     """基础分支处理器"""
@@ -74,19 +72,24 @@ class ProcessBranchHandler(BranchHandler):
         # 获取operation layer级别的节点，即start、exit、prctl等
         evt_type = event.get("evt.type", "")
         if evt_type not in self.root.children:
+            eventCounter.on_event()
+            print("Warning(F):    " + json.dumps(event, ensure_ascii=False)+"\n")
             self.root.add_child(evt_type, "process_operation")
         # 获取process layer级别的节点,即相应的proc.name
         proc_name = event.get("proc.name", "unknown")
         if proc_name not in self.root.children[evt_type].children:
+            eventCounter.on_event()
+            print("Warning(F):    " + json.dumps(event, ensure_ascii=False)+"\n")
             self.root.children[evt_type].add_child(proc_name, "process_name")
         # 获取Attribute Token Bag级别的节点，在进程中就是命令参数
         cmdline = event.get("proc.cmdline", "")
         keys = re.findall(r'-{1,2}[^\s-]+', cmdline)
         for k in keys:
             if k not in self.root.children[evt_type].children[proc_name].children:
+                eventCounter.on_event()
+                print("Warning(F):    " + json.dumps(event, ensure_ascii=False)+"\n")
                 self.root.children[evt_type].children[proc_name].add_child(k, "cmd_argument")
             self.root.children[evt_type].children[proc_name].children[k].events_count += 1
-        print("Warning(F):    " + json.dumps(event, ensure_ascii=False)+"\n")
 
         if learnState == True:
             update_learn_state(eventCounter)
@@ -131,10 +134,12 @@ class NetworkBranchHandler(BranchHandler):
         # 获取operation layer级别的节点，即connection、listen、shutdown等
         evt_type = event.get("evt.type", "")
         if evt_type not in self.root.children:
+            eventCounter.on_event()
             self.root.add_child(evt_type, "network_operation")
         # 获取process layer级别的节点,即相应的proc.name
         proc_name = event.get("proc.name", "unknown")
         if proc_name not in self.root.children[evt_type].children:
+            eventCounter.on_event()
             self.root.children[evt_type].add_child(proc_name, "process_name")
         # 获取Attribute Token Bag级别的节点，在网络中就是ip、port、protocol等
         protocol = event.get("fd.type", "")
@@ -148,9 +153,10 @@ class NetworkBranchHandler(BranchHandler):
             _ , right = str.split("->")
         value = right + ":" + protocol
         if value not in self.root.children[evt_type].children[proc_name].children:
+            eventCounter.on_event()
+            print("Warning(F): " + json.dumps(event, ensure_ascii=False)+"\n")
             self.root.children[evt_type].children[proc_name].add_child(value, "network_attribute")
         self.root.children[evt_type].children[proc_name].children[value].events_count += 1
-        print("Warning(F): " + json.dumps(event, ensure_ascii=False)+"\n")
 
         if learnState == True:
             update_learn_state(eventCounter)
@@ -188,21 +194,26 @@ class FileBranchHandler(BranchHandler):
         # 获取operation layer级别的节点，即create、open、read、write、close等
         evt_type = event.get("evt.type", "")
         if evt_type not in self.root.children:
+            eventCounter.on_event()
             self.root.add_child(evt_type, "file_operation")
         # 获取process layer级别的节点,即相应的proc.name
         proc_name = event.get("proc.name", "unknown")
         if proc_name not in self.root.children[evt_type].children:
+            eventCounter.on_event()
             self.root.children[evt_type].add_child(proc_name, "process_name")
         # 获取Attribute Token Bag级别的节点，在文件中就是directory和filename
         directory = event.get("fd.directory", "")
         filename = event.get("fd.name", "")
         if directory not in self.root.children[evt_type].children[proc_name].children:
+            eventCounter.on_event()
+            print("Warning(F): " + json.dumps(event, ensure_ascii=False)+"\n")
             self.root.children[evt_type].children[proc_name].add_child(directory, "directory_path")
         self.root.children[evt_type].children[proc_name].children[directory].events_count += 1
         if filename not in self.root.children[evt_type].children[proc_name].children:
+            eventCounter.on_event()
+            print("Warning(F): " + json.dumps(event, ensure_ascii=False)+"\n")
             self.root.children[evt_type].children[proc_name].add_child(filename, "file_name")
         self.root.children[evt_type].children[proc_name].children[filename].events_count += 1
-        print("Warning(F): " + json.dumps(event, ensure_ascii=False)+"\n")
 
         if learnState == True:
             update_learn_state(eventCounter)

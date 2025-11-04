@@ -51,7 +51,7 @@ def main():
             json_obj = log_queue.get(timeout=1)
             if json_obj:
                 cnt += 1
-                print("cnt:", cnt)
+                print("log:", cnt)
                 # 解析事件并添加到HBT模型
                 output_fields = event_parser.extract_output_fields(json_obj)
                 category = event_parser.categorize_event(json_obj)
