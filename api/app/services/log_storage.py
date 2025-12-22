@@ -52,10 +52,18 @@ class LogStorage:
                     evt_type TEXT,
                     proc_name TEXT,
                     fd_name TEXT,
-                    output TEXT
+                    output TEXT,
+                    attribute_value TEXT
                 )
             ''')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_alerts_container_ts ON alerts (container_id, timestamp DESC)')
+
+            # Migration: Add attribute_value column if not exists
+            try:
+                cursor.execute("SELECT attribute_value FROM alerts LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE alerts ADD COLUMN attribute_value TEXT")
+                logger.info("Migrated alerts table: added attribute_value column")
 
             # Create incidents table for reduced alerts (post-reducer)
             cursor.execute('''
@@ -73,15 +81,55 @@ class LogStorage:
                     details TEXT,
                     analysis_window INTEGER,
                     similarity_threshold REAL,
-                    created_at REAL NOT NULL
+                    created_at REAL NOT NULL,
+                    analysis TEXT
                 )
             ''')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_incidents_container_ts ON incidents (container_id, timestamp DESC)')
             
+            # Create config table for dynamic settings (e.g. LLM config)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            ''')
+
+            # Migration: Add analysis column if not exists
+            try:
+                cursor.execute("SELECT analysis FROM incidents LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE incidents ADD COLUMN analysis TEXT")
+                logger.info("Migrated incidents table: added analysis column")
+
             conn.commit()
             conn.close()
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
+
+    def get_config(self, key: str) -> Optional[str]:
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM config WHERE key = ?", (key,))
+            row = cursor.fetchone()
+            conn.close()
+            return row[0] if row else None
+        except Exception as e:
+            logger.error(f"Failed to get config {key}: {e}")
+            return None
+
+    def set_config(self, key: str, value: str):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", (key, value))
+            conn.commit()
+            conn.close()
+            if LOG_STORAGE_DEBUG:
+                logger.info(f"Set config {key}")
+        except Exception as e:
+            logger.error(f"Failed to set config {key}: {e}")
 
     def add_event(self, event: Dict[str, Any]):
         try:
@@ -172,7 +220,7 @@ class LogStorage:
             return []
 
 
-    def add_alert(self, output_fields: Dict[str, Any], category: str, reason: str):
+    def add_alert(self, output_fields: Dict[str, Any], category: str, reason: str, attribute_value: str = ""):
         try:
             container_id = (
                 output_fields.get('container.name')
@@ -203,9 +251,9 @@ class LogStorage:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO alerts (container_id, timestamp, category, priority, reason, evt_type, proc_name, fd_name, output)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (container_id, timestamp, category, priority, reason, evt_type, proc_name, fd_name, output))
+                INSERT INTO alerts (container_id, timestamp, category, priority, reason, evt_type, proc_name, fd_name, output, attribute_value)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (container_id, timestamp, category, priority, reason, evt_type, proc_name, fd_name, output, attribute_value))
             conn.commit()
             conn.close()
             if LOG_STORAGE_DEBUG:
@@ -231,6 +279,7 @@ class LogStorage:
         details: str | None,
         analysis_window: int | None = 300,
         similarity_threshold: float | None = 0.8,
+        analysis: str | None = None,
     ) -> None:
         try:
             now_ts = datetime.utcnow().timestamp()
@@ -240,12 +289,12 @@ class LogStorage:
                 '''
                 INSERT INTO incidents (
                     container_id, timestamp, threat_score, cluster_id, attribute_name, attribute_value,
-                    event_type, process_name, alert_content, details, analysis_window, similarity_threshold, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    event_type, process_name, alert_content, details, analysis_window, similarity_threshold, created_at, analysis
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     str(container_id), float(timestamp), float(threat_score), cluster_id,
                     attribute_name, attribute_value, event_type, process_name,
-                    alert_content, details, analysis_window, similarity_threshold, now_ts
+                    alert_content, details, analysis_window, similarity_threshold, now_ts, analysis
                 )
             )
             conn.commit()
@@ -260,6 +309,21 @@ class LogStorage:
         except Exception as e:
             logger.error(f"Failed to add incident to storage: {e}")
 
+    def update_incident_analysis(self, incident_id: int, analysis: str):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE incidents SET analysis = ? WHERE id = ?",
+                (analysis, incident_id)
+            )
+            conn.commit()
+            conn.close()
+            if LOG_STORAGE_DEBUG:
+                logger.info(f"Updated analysis for incident {incident_id}")
+        except Exception as e:
+            logger.error(f"Failed to update incident analysis: {e}")
+
     def get_incidents(
         self,
         container_id: Optional[str] = None,
@@ -273,8 +337,8 @@ class LogStorage:
             cursor = conn.cursor()
 
             base = '''
-                SELECT container_id, timestamp, threat_score, cluster_id, attribute_name, attribute_value,
-                       event_type, process_name, alert_content, details, analysis_window, similarity_threshold, created_at
+                SELECT id, container_id, timestamp, threat_score, cluster_id, attribute_name, attribute_value,
+                       event_type, process_name, alert_content, details, analysis_window, similarity_threshold, created_at, analysis
                 FROM incidents
             '''
             params: list[Any] = []
@@ -297,6 +361,7 @@ class LogStorage:
             items: List[Dict[str, Any]] = []
             for r in rows:
                 items.append({
+                    "id": r["id"],
                     "container_id": r["container_id"],
                     "timestamp": datetime.fromtimestamp(r["timestamp"]).isoformat(),
                     "threat_score": r["threat_score"],
@@ -310,6 +375,7 @@ class LogStorage:
                     "analysis_window": r["analysis_window"],
                     "similarity_threshold": r["similarity_threshold"],
                     "created_at": datetime.fromtimestamp(r["created_at"]).isoformat(),
+                    "analysis": r["analysis"],
                 })
             return items
         except Exception as e:
@@ -381,7 +447,7 @@ class LogStorage:
                 now_ts = datetime.utcnow().timestamp()
                 start_ts = now_ts - window_seconds
                 cursor.execute('''
-                    SELECT container_id, timestamp, category, reason, evt_type, proc_name, fd_name, output
+                    SELECT container_id, timestamp, category, reason, evt_type, proc_name, fd_name, output, attribute_value
                     FROM alerts
                     WHERE container_id = ? AND timestamp >= ?
                     ORDER BY timestamp DESC
@@ -389,7 +455,7 @@ class LogStorage:
                 ''', (container_id, start_ts, limit, offset))
             else:
                 cursor.execute('''
-                    SELECT container_id, timestamp, category, reason, evt_type, proc_name, fd_name, output
+                    SELECT container_id, timestamp, category, reason, evt_type, proc_name, fd_name, output, attribute_value
                     FROM alerts
                     WHERE container_id = ?
                     ORDER BY timestamp DESC
@@ -408,6 +474,7 @@ class LogStorage:
                     "proc_name": r["proc_name"],
                     "fd_name": r["fd_name"],
                     "output": r["output"],
+                    "attribute_value": r["attribute_value"],
                 })
             return items
         except Exception as e:
