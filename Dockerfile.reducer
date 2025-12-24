@@ -2,9 +2,8 @@ FROM python:3.14-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install runtime deps for reducer
@@ -13,21 +12,21 @@ RUN pip install --no-cache-dir \
     numpy \
     scikit-learn \
     tqdm \
-    httpx \
-    pydantic-settings
+    httpx
 
-COPY . .
+COPY reducer/ reducer/
+COPY hanabi/ hanabi/
+COPY api/ api/
 
 ENV PYTHONPATH=/app \
     DATA_DIR=/app/data \
     PROMETHEUS_URL=http://prometheus:9090 \
     REDUCER_INTERVAL_SECONDS=270 \
     REDUCER_WINDOW_SECONDS=300 \
-    REDUCER_SIMILARITY=0.6 \
+    REDUCER_SIMILARITY=0.7 \
     REDUCER_THREAT_THRESHOLD=60.0 \
     REDUCER_MAX_PER_CLUSTER=1
 
 RUN mkdir -p /app/data && chmod -R 777 /app/data
 
 CMD ["python", "reducer/service.py"]
-

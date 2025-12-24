@@ -205,7 +205,7 @@ class LogStorage:
             logs = []
             for row in rows:
                 logs.append({
-                    "timestamp": datetime.fromtimestamp(row['timestamp']).isoformat(),
+                    "timestamp": datetime.fromtimestamp(row['timestamp'] + 8 * 3600).isoformat(),
                     "rule": row['rule'],
                     "priority": row['priority'],
                     "source": row['source'],
@@ -358,12 +358,12 @@ class LogStorage:
             cursor.execute(base, params)
             rows = cursor.fetchall()
             conn.close()
-            items: List[Dict[str, Any]] = []
+            items = []
             for r in rows:
                 items.append({
                     "id": r["id"],
                     "container_id": r["container_id"],
-                    "timestamp": datetime.fromtimestamp(r["timestamp"]).isoformat(),
+                    "timestamp": datetime.fromtimestamp(r["timestamp"] + 8 * 3600).isoformat(),
                     "threat_score": r["threat_score"],
                     "cluster_id": r["cluster_id"],
                     "attribute_name": r["attribute_name"],
@@ -374,13 +374,49 @@ class LogStorage:
                     "details": r["details"],
                     "analysis_window": r["analysis_window"],
                     "similarity_threshold": r["similarity_threshold"],
-                    "created_at": datetime.fromtimestamp(r["created_at"]).isoformat(),
+                    "created_at": datetime.fromtimestamp(r["created_at"] + 8 * 3600).isoformat(),
                     "analysis": r["analysis"],
                 })
             return items
         except Exception as e:
             logger.error(f"Failed to query incidents: {e}")
             return []
+
+    def get_funnel_stats(self, window_seconds: int = 0) -> Dict[str, int]:
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            stats = {"logs": 0, "alerts": 0, "incidents": 0}
+            tables = {"logs": "events", "alerts": "alerts", "incidents": "incidents"}
+            
+            if window_seconds > 0:
+                now_ts = datetime.utcnow().timestamp()
+                start_ts = now_ts - window_seconds
+                for key, table in tables.items():
+                    try:
+                        cursor.execute(f"SELECT COUNT(*) FROM {table} WHERE timestamp >= ?", (start_ts,))
+                        row = cursor.fetchone()
+                        if row:
+                            stats[key] = row[0]
+                    except sqlite3.OperationalError:
+                        # Table might not exist
+                        stats[key] = 0
+            else:
+                for key, table in tables.items():
+                    try:
+                        cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                        row = cursor.fetchone()
+                        if row:
+                            stats[key] = row[0]
+                    except sqlite3.OperationalError:
+                        stats[key] = 0
+                    
+            conn.close()
+            return stats
+        except Exception as e:
+            logger.error(f"Failed to get funnel stats: {e}")
+            return {"logs": 0, "alerts": 0, "incidents": 0}
 
     def get_alert_stats(self, container_id: str, window_seconds: int = 300, priority: Optional[str] = None) -> List[Dict[str, Any]]:
         try:
@@ -467,7 +503,7 @@ class LogStorage:
             for r in rows:
                 items.append({
                     "container_id": r["container_id"],
-                    "timestamp": datetime.fromtimestamp(r["timestamp"]).isoformat(),
+                    "timestamp": datetime.fromtimestamp(r["timestamp"] + 8 * 3600).isoformat(),
                     "category": r["category"],
                     "reason": r["reason"],
                     "evt_type": r["evt_type"],

@@ -85,11 +85,10 @@ def _alerts_to_dataframe(alerts: List[Dict[str, Any]]) -> pd.DataFrame:
         # - Attribute Name/Value: x5
         # - Process/Event Type: x10
         df["告警内容"] = df.apply(
-            lambda x: f"{x['异常属性名']} " * 5 + 
-                      f"{x['异常属性值']} " * 5 + 
-                      f"{x['进程名']} " * 10 + 
-                      f"{x['事件类型']} " * 10 + 
-                      f"{x['事件详情']}", 
+            lambda x: f"{x['异常属性名']} " + 
+                      f"{x['异常属性值']} " + 
+                      f"{x['进程名']} " + 
+                      f"{x['事件类型']} " ,
             axis=1
         )
         df["威胁特征"] = df.apply(lambda x: f"进程:{x['进程名']} 事件:{x['事件类型']} 详情:{x['事件详情']} 频次:{x['异常频次']}", axis=1)
@@ -110,6 +109,7 @@ def _reduce_for_container(container_id: str, alerts: List[Dict[str, Any]]):
         cluster_reduction=True,
         threat_threshold=THREAT_THRESHOLD,
         max_alerts_per_cluster=MAX_PER_CLUSTER,
+        similarity_threshold=SIMILARITY_THRESHOLD,
     )
 
     incidents: List[Dict[str, Any]] = []
