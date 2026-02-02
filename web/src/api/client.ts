@@ -11,6 +11,8 @@ const apiPrefix = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 const API_BASE = `${apiPrefix}/api`;
 
 class ApiClient {
+  public baseURL = API_BASE;
+
   private async get<T>(endpoint: string): Promise<T> {
     const response = await fetch(`${API_BASE}${endpoint}`);
     if (!response.ok) {

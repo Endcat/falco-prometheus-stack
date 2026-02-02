@@ -421,23 +421,41 @@ class LogStorage:
         try:
             stats = {"logs": 0, "alerts": 0, "incidents": 0}
             
-            # 1. Query Logs DB for events
+            # 1. Query Logs count from Prometheus
             try:
-                conn_logs = sqlite3.connect(self.logs_db_path)
-                cursor_logs = conn_logs.cursor()
-                if window_seconds > 0:
-                    start_ts = datetime.utcnow().timestamp() - window_seconds
-                    cursor_logs.execute("SELECT COUNT(*) FROM events WHERE timestamp >= ?", (start_ts,))
-                else:
-                    cursor_logs.execute("SELECT COUNT(*) FROM events")
-                row = cursor_logs.fetchone()
-                if row:
-                    stats["logs"] = row[0]
-                conn_logs.close()
-            except Exception as e:
-                logger.error(f"Failed to query logs count: {e}")
+                # Use local import to avoid circular dependency
+                from api.app.services.prometheus import prometheus_service
+                import asyncio
+                pass
+            except Exception:
+                pass
 
-            # 2. Query Alerts DB for alerts and incidents
+            # Let's use sync httpx to query Prometheus directly here.
+            import httpx
+            prometheus_url = os.getenv("PROMETHEUS_URL", "http://43039infrasecurity-exporter:9090")
+            
+            if window_seconds > 0:
+                # Query: sum(increase(syscall_events_total[30m]))
+                # Note: increase() is better for counters over a window.
+                duration_str = f"{int(window_seconds)}s" # e.g. 1800s
+                query = f'sum(increase(syscall_events_total[{duration_str}]))'
+            else:
+                # Total all time? Prometheus retention is short (1d). 
+                # But syscall_events_total is a counter. sum(syscall_events_total) gives current value.
+                query = 'sum(syscall_events_total)'
+                
+            try:
+                with httpx.Client(timeout=2.0) as client:
+                    resp = client.get(f"{prometheus_url}/api/v1/query", params={"query": query})
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        result = data.get("data", {}).get("result", [])
+                        if result:
+                            stats["logs"] = int(float(result[0].get("value", [0, 0])[1]))
+            except Exception as e:
+                logger.error(f"Failed to query Prometheus for logs count: {e}")
+
+            # 2. Query Alerts DB for alerts and incidents (unchanged)
             try:
                 conn_alerts = sqlite3.connect(self.alerts_db_path)
                 cursor_alerts = conn_alerts.cursor()

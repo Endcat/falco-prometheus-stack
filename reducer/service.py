@@ -185,17 +185,17 @@ def main():
         try:
             now = time.time()
             
-            # 1. Run Data Cleanup (DELETE)
-            if now - last_cleanup_ts > CLEANUP_INTERVAL:
-                logger.info(f"Running data cleanup (retention={RETENTION_DAYS:.4f} days)...")
-                log_storage.cleanup_old_data(retention_days=RETENTION_DAYS)
-                last_cleanup_ts = now
+            # # 1. Run Data Cleanup (DELETE)
+            # if now - last_cleanup_ts > CLEANUP_INTERVAL:
+            #     logger.info(f"Running data cleanup (retention={RETENTION_DAYS:.4f} days)...")
+            #     log_storage.cleanup_old_data(retention_days=RETENTION_DAYS)
+            #     last_cleanup_ts = now
                 
-            # 2. Run Data Vacuum (VACUUM)
-            if now - last_vacuum_ts > VACUUM_INTERVAL:
-                logger.info("Running daily data vacuum...")
-                log_storage.vacuum_logs_db()
-                last_vacuum_ts = now
+            # # 2. Run Data Vacuum (VACUUM)
+            # if now - last_vacuum_ts > VACUUM_INTERVAL:
+            #     logger.info("Running daily data vacuum...")
+            #     log_storage.vacuum_logs_db()
+            #     last_vacuum_ts = now
 
             # 3. Run Alerts Cleanup (DELETE)
             if now - last_alerts_cleanup_ts > ALERTS_CLEANUP_INTERVAL:

@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir \
     docker \
     prometheus-client \
     fastapi \
-    uvicorn \
+    uvicorn[standard] \
     httpx \
     pydantic-settings \
     gunicorn \
