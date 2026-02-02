@@ -36,8 +36,9 @@ async def get_overview():
             # Log error but continue with partial results or empty
             results[key] = []
 
-    # Get funnel stats (All time for now)
-    funnel_stats = log_storage.get_funnel_stats(window_seconds=0)
+    # Get funnel stats (Last 30 minutes to match logs retention)
+    # 1800 seconds = 30 minutes
+    funnel_stats = log_storage.get_funnel_stats(window_seconds=1800)
 
     # Format response
     formatted_response = {

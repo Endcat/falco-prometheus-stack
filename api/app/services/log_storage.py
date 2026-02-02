@@ -587,14 +587,58 @@ class LogStorage:
                 cursor_logs.execute(f"DELETE FROM events WHERE timestamp < ?", (cutoff_ts,))
                 deleted_events = cursor_logs.rowcount
                 conn_logs.commit()
+                # WAL checkpoint helps, but doesn't reclaim physical space like VACUUM
                 cursor_logs.execute("PRAGMA wal_checkpoint(TRUNCATE);")
                 conn_logs.close()
-                logger.info(f"Cleanup completed. Deleted events: {deleted_events}")
+                if deleted_events > 0:
+                    logger.info(f"Cleanup completed. Deleted events: {deleted_events}")
             except Exception as e:
                 logger.error(f"Failed to cleanup logs db: {e}")
             
         except Exception as e:
             logger.error(f"Failed to run data cleanup: {e}")
+
+    def cleanup_old_alerts(self, retention_days: float = 0.125):
+        """
+        Delete 'alerts' older than retention_days.
+        Default is 0.125 days (3 hours).
+        Incidents are preserved.
+        """
+        try:
+            cutoff_ts = datetime.utcnow().timestamp() - (retention_days * 86400)
+            
+            # Clean Alerts DB
+            try:
+                conn_alerts = sqlite3.connect(self.alerts_db_path)
+                cursor_alerts = conn_alerts.cursor()
+                cursor_alerts.execute(f"DELETE FROM alerts WHERE timestamp < ?", (cutoff_ts,))
+                deleted_alerts = cursor_alerts.rowcount
+                conn_alerts.commit()
+                cursor_alerts.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+                conn_alerts.close()
+                if deleted_alerts > 0:
+                    logger.info(f"Alerts cleanup completed. Deleted alerts: {deleted_alerts}")
+            except Exception as e:
+                logger.error(f"Failed to cleanup alerts db: {e}")
+            
+        except Exception as e:
+            logger.error(f"Failed to run alerts cleanup: {e}")
+
+    def vacuum_logs_db(self):
+        """
+        Run VACUUM on logs.db to reclaim physical space.
+        This operation can be slow and may lock the database.
+        """
+        try:
+            logger.info(f"Starting VACUUM on {self.logs_db_path}...")
+            start_time = datetime.now()
+            conn_logs = sqlite3.connect(self.logs_db_path)
+            conn_logs.execute("VACUUM;")
+            conn_logs.close()
+            duration = (datetime.now() - start_time).total_seconds()
+            logger.info(f"VACUUM completed on {self.logs_db_path} in {duration:.2f}s")
+        except Exception as e:
+            logger.error(f"Failed to vacuum logs db: {e}")
 
 # Global instance
 # Ensure the data directory exists

@@ -40,7 +40,7 @@ const Overview: React.FC = () => {
 
   // Prepare Chart Options
   const funnelChartOption: echarts.EChartsOption = {
-    title: { text: 'Security Data Funnel', left: 'center' },
+    title: { text: 'Security Data Funnel (Last 30m)', left: 'center' },
     tooltip: { 
         trigger: 'item',
         formatter: (params: any) => `${params.name}: <b>${params.data.realValue}</b>`
