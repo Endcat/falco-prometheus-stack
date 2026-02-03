@@ -11,7 +11,7 @@ logger = logging.getLogger("LogsIngestor")
 
 FALCO_CONTAINER = os.getenv("FALCO_CONTAINER", "43039infrasecurity-falco")
 API_URL = os.getenv("API_URL", "http://43039infrasecurity-api:8000/infrasecurity/api/logs/internal/ingest")
-BATCH_SIZE = 100 # Reduced batch size for lower latency streaming
+BATCH_SIZE = 5000 # Reduced batch size for lower latency streaming
 FLUSH_INTERVAL = 3.0  # seconds
 
 def flush_buffer(client: httpx.Client, buffer: List[dict]):

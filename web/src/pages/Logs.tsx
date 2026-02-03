@@ -33,7 +33,7 @@ const Logs: React.FC = () => {
   const [logs, setLogs] = useState<LogEvent[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
-  const MAX_LOGS = 300;
+  const MAX_LOGS = 100;
 
   // Auto-select first container
   useEffect(() => {

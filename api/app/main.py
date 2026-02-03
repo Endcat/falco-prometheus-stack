@@ -61,7 +61,10 @@ async def verify_token(token: str | None = Query(default=None)):
     if not token:
         return {"success": False, "error": "缺少 token"}
 
-    verify_url = "https://www.ideas.cnpc/api/common/v1/users/current?appCode=gx06hustinfrasecurity"
+    verify_url = os.getenv(
+        "VERIFY_TOKEN_URL",
+        "https://www.ideas.cnpc/api/common/v1/users/current?appCode=gx06hustinfrasecurity",
+    )
 
     try:
         async with httpx.AsyncClient(timeout=10.0, verify=False) as client:

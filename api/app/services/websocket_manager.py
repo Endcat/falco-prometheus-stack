@@ -43,15 +43,8 @@ class WebSocketManager:
                 continue
 
             # Prepare frontend-friendly format (LogEvent)
-            # The raw log from Falco is complex, frontend expects specific fields
             ts_val = log.get('time') or output_fields.get('evt.time') or output_fields.get('evt.time.iso8601')
-            
-            # We must ensure timestamp is a number (seconds) for frontend parsing: new Date(ts * 1000)
-            # Or pass ISO string directly if frontend supports it.
-            # Frontend code: new Date(logData.timestamp * 1000).toISOString()
-            # So backend should send timestamp as float (seconds).
-            
-            # Let's parse timestamp properly
+                       
             import datetime
             timestamp = 0.0
             if isinstance(ts_val, str):
