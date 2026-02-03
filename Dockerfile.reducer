@@ -1,10 +1,14 @@
-FROM python:3.14-slim
+# Stage 1: Builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Install runtime deps for reducer
 RUN pip install --no-cache-dir \
@@ -13,6 +17,14 @@ RUN pip install --no-cache-dir \
     scikit-learn \
     tqdm \
     httpx
+
+# Stage 2: Runner
+FROM python:3.14-slim
+
+WORKDIR /app
+
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY reducer/ reducer/
 COPY hanabi/ hanabi/
