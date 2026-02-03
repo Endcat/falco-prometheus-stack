@@ -1,15 +1,20 @@
+version: '3.8'
+
 services:
+  # 1. Falco Security Engine
   falco:
     image: hanabi_falco:latest
     container_name: 43039infrasecurity-falco
     privileged: true
+    # Enable JSON output for programmatic consumption
     command: ["falco", "-o", "json_output=true", "-o", "json_include_output_fields_property=true", "-o", "webserver.enabled=false"]
     volumes:
-      - /sys/kernel/tracing:/sys/kernel/tracing:ro
+      - /sys/kernel/tracing:/sys/kernel/tracing:ro 
       - /var/run/docker.sock:/host/var/run/docker.sock
       - /etc:/host/etc:ro
       - /proc:/host/proc:ro
 
+  # 2. Prometheus Exporter (Converts Falco logs to Metrics)
   exporter:
     image: hanabi_exporter:latest
     container_name: 43039infrasecurity-exporter
@@ -20,8 +25,9 @@ services:
     depends_on:
       - falco
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock # Needs access to read Falco logs
 
+  # 3. Hanabi Worker (Processes logs for HBT & Storage)
   hanabi_worker:
     image: hanabi_hanabi_worker:latest
     container_name: 43039infrasecurity-worker
@@ -32,44 +38,56 @@ services:
       - DATA_DIR=/app/data
       - PYTHONUNBUFFERED=1
       - LOG_STORAGE_DEBUG=1
-      - ALERTS_INGESTOR_URL=http://alerts-ingestor:9000
+      - ALERTS_INGESTOR_URL=http://43039infrasecurity-alerts-ingestor:9000
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - shared_data:/app/data
     depends_on:
       - falco
 
+  # 4. API Backend (FastAPI)
   api:
     image: hanabi_api:latest
     container_name: 43039infrasecurity-api
     command: uvicorn api.app.main:app --host 0.0.0.0 --port 8000
     environment:
-      - PROMETHEUS_URL=http://prometheus:9090
+      - PROMETHEUS_URL=http://43039infrasecurity-prometheus:9090
       - HBT_STORAGE_PATH=/app/data/hbt
       - DATA_DIR=/app/data
-      - ACCESS_CONTROL_ENABLED=${ACCESS_CONTROL_ENABLED:-0}
+      - ACCESS_CONTROL_ENABLED=${ACCESS_CONTROL_ENABLED:-1}
+      - VERIFY_TOKEN_URL=${VERIFY_TOKEN_URL:-https://www.ideas.cnpc/api/common/v1/users/current?appCode=gx06hustinfrasecurity}
     volumes:
       - shared_data:/app/data
     depends_on:
       - prometheus
       - hanabi_worker
 
+  # 5. Frontend (React + Nginx)
   web:
     image: hanabi_web:latest
-    container_name: 43039infrasecurity-web
+    container_name: 43039infrasecurity-web  
     ports:
       - "8081:80"
     environment:
-      - ACCESS_CONTROL_ENABLED=${ACCESS_CONTROL_ENABLED:-0}
+      - ACCESS_CONTROL_ENABLED=${ACCESS_CONTROL_ENABLED:-1}
     depends_on:
       - api
 
+  # 6. Prometheus (Metrics DB)
   prometheus:
     image: hanabi_prometheus:latest
     container_name: 43039infrasecurity-prometheus
+    # Set retention to 3 days to match the project's lightweight storage policy
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+      - --storage.tsdb.retention.time=3d
     depends_on:
       - exporter
 
+  # 8. Logs Ingestor (Falco -> logs DB)
   logs-ingestor:
     image: hanabi_logs-ingestor:latest
     container_name: 43039infrasecurity-logs-ingestor
@@ -85,6 +103,7 @@ services:
     depends_on:
       - falco
 
+  # 9. Alerts Ingestor (Hanabi Warning(T) -> alerts DB)
   alerts-ingestor:
     image: hanabi_alerts-ingestor:latest
     container_name: 43039infrasecurity-alerts-ingestor
@@ -97,12 +116,13 @@ services:
     depends_on:
       - hanabi_worker
 
+  # 10. Reducer (periodic alerts reduction -> incidents)
   reducer:
     image: hanabi_reducer:latest
     container_name: 43039infrasecurity-reducer
     command: python reducer/service.py
     environment:
-      - PROMETHEUS_URL=http://prometheus:9090
+      - PROMETHEUS_URL=http://43039infrasecurity-prometheus:9090
       - DATA_DIR=/app/data
       - REDUCER_INTERVAL_SECONDS=270
       - REDUCER_WINDOW_SECONDS=300
@@ -116,13 +136,14 @@ services:
       - prometheus
       - alerts-ingestor
 
+  # 11. Analyzer (LLM Analysis for Incidents)
   analyzer:
     image: hanabi_analyzer:latest
     container_name: 43039infrasecurity-analyzer
     command: python analyzer/service.py
     environment:
       - DATA_DIR=/app/data
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DEEPSEEK_ENDPOINT=https://api.deepseek.com
       - DEEPSEEK_MODEL=deepseek-chat
       - PYTHONUNBUFFERED=1
