@@ -16,8 +16,8 @@ dependencies = [
     "pydantic-settings>=2.4.0",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=8.0.0",
     "ruff>=0.3.0",
 ]

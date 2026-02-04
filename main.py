@@ -1,12 +1,15 @@
-from hanabi.utils.queue import DockerLogQueue
-from hanabi.models.hbt import HBTModel
-from hanabi.models.event_parser import EventParser
-from hanabi.models.tree_node import TreeNode
-from rich.tree import Tree
-from rich import print as rprint
 import json
 
-def print_tree(node: TreeNode, tree: Tree = None, level: int = 0) -> Tree:
+from rich import print as rprint
+from rich.tree import Tree
+
+from hanabi.models.event_parser import EventParser
+from hanabi.models.hbt import HBTModel
+from hanabi.models.tree_node import TreeNode
+from hanabi.utils.queue import DockerLogQueue
+
+
+def print_tree(node: TreeNode, tree: Tree | None = None, level: int = 0) -> Tree:
     """将TreeNode转换为Rich树形结构进行可视化输出"""
     if tree is None:
         # 创建根节点
@@ -22,15 +25,16 @@ def print_tree(node: TreeNode, tree: Tree = None, level: int = 0) -> Tree:
         node_text = f"[blue]{node.name}[/blue] ({node.node_type})"
         if node.events_count > 0:
             node_text += f" [green]({node.events_count} events)[/green]"
-        
+
         # 添加节点到树
         branch = tree.add(node_text)
-        
+
         # 递归处理子节点
         for child in node.children.values():
             print_tree(child, branch, level + 1)
-    
+
     return tree
+
 
 def main():
     log_queue = DockerLogQueue(container_name="falco")
@@ -44,7 +48,7 @@ def main():
     # 初始化事件解析器
     event_parser = EventParser()
     print("after EventParser")
-    
+
     try:
         cnt = 0
         while True:
@@ -55,7 +59,7 @@ def main():
                 # 解析事件并添加到HBT模型
                 output_fields = event_parser.extract_output_fields(json_obj)
                 category = event_parser.categorize_event(json_obj)
-                
+
                 if category == "process":
                     print("process log")
                     hbt_model.add_process_event(output_fields)
@@ -66,13 +70,12 @@ def main():
                     print("file log")
                     hbt_model.add_file_event(output_fields)
 
-                    
     except KeyboardInterrupt:
         print("\n⏹️  Stopped by user")
         # 打印最终模型结构
         print("Final HBT model (JSON format):")
         print(json.dumps(hbt_model.get_model(), ensure_ascii=False, default=str))
-        
+
         # 以树形结构打印模型
         print("\nFinal HBT model (Tree format):")
         model_dict = hbt_model.get_model()
@@ -81,6 +84,7 @@ def main():
         root_node = TreeNode(hbt_structure["name"], hbt_structure["type"])
         root_node.events_count = hbt_structure["events_count"]
         root_node.metadata = hbt_structure["metadata"]
+
         # 递归重建子节点
         def rebuild_tree(node_dict, parent_node):
             for child_name, child_dict in node_dict["children"].items():
@@ -88,6 +92,7 @@ def main():
                 child_node.events_count = child_dict["events_count"]
                 child_node.metadata = child_dict["metadata"]
                 rebuild_tree(child_dict, child_node)
+
         rebuild_tree(hbt_structure, root_node)
         # 打印树形结构
         tree = print_tree(root_node)
@@ -102,7 +107,7 @@ def get_model_statistics(hbt_model):
     model = hbt_model.get_model()
     return {
         "container_id": model["container_id"],
-        "total_events": 0  # 简化实现，实际应计算所有事件数量
+        "total_events": 0,  # 简化实现，实际应计算所有事件数量
     }
 
 
