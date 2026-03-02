@@ -421,23 +421,41 @@ class LogStorage:
         try:
             stats = {"logs": 0, "alerts": 0, "incidents": 0}
             
-            # 1. Query Logs DB for events
+            # 1. Query Logs count from Prometheus
             try:
-                conn_logs = sqlite3.connect(self.logs_db_path)
-                cursor_logs = conn_logs.cursor()
-                if window_seconds > 0:
-                    start_ts = datetime.utcnow().timestamp() - window_seconds
-                    cursor_logs.execute("SELECT COUNT(*) FROM events WHERE timestamp >= ?", (start_ts,))
-                else:
-                    cursor_logs.execute("SELECT COUNT(*) FROM events")
-                row = cursor_logs.fetchone()
-                if row:
-                    stats["logs"] = row[0]
-                conn_logs.close()
-            except Exception as e:
-                logger.error(f"Failed to query logs count: {e}")
+                # Use local import to avoid circular dependency
+                from api.app.services.prometheus import prometheus_service
+                import asyncio
+                pass
+            except Exception:
+                pass
 
-            # 2. Query Alerts DB for alerts and incidents
+            # Let's use sync httpx to query Prometheus directly here.
+            import httpx
+            prometheus_url = os.getenv("PROMETHEUS_URL", "http://43039infrasecurity-exporter:9090")
+            
+            if window_seconds > 0:
+                # Query: sum(increase(syscall_events_total[30m]))
+                # Note: increase() is better for counters over a window.
+                duration_str = f"{int(window_seconds)}s" # e.g. 1800s
+                query = f'sum(increase(syscall_events_total[{duration_str}]))'
+            else:
+                # Total all time? Prometheus retention is short (1d). 
+                # But syscall_events_total is a counter. sum(syscall_events_total) gives current value.
+                query = 'sum(syscall_events_total)'
+                
+            try:
+                with httpx.Client(timeout=2.0) as client:
+                    resp = client.get(f"{prometheus_url}/api/v1/query", params={"query": query})
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        result = data.get("data", {}).get("result", [])
+                        if result:
+                            stats["logs"] = int(float(result[0].get("value", [0, 0])[1]))
+            except Exception as e:
+                logger.error(f"Failed to query Prometheus for logs count: {e}")
+
+            # 2. Query Alerts DB for alerts and incidents (unchanged)
             try:
                 conn_alerts = sqlite3.connect(self.alerts_db_path)
                 cursor_alerts = conn_alerts.cursor()
@@ -587,14 +605,58 @@ class LogStorage:
                 cursor_logs.execute(f"DELETE FROM events WHERE timestamp < ?", (cutoff_ts,))
                 deleted_events = cursor_logs.rowcount
                 conn_logs.commit()
+                # WAL checkpoint helps, but doesn't reclaim physical space like VACUUM
                 cursor_logs.execute("PRAGMA wal_checkpoint(TRUNCATE);")
                 conn_logs.close()
-                logger.info(f"Cleanup completed. Deleted events: {deleted_events}")
+                if deleted_events > 0:
+                    logger.info(f"Cleanup completed. Deleted events: {deleted_events}")
             except Exception as e:
                 logger.error(f"Failed to cleanup logs db: {e}")
             
         except Exception as e:
             logger.error(f"Failed to run data cleanup: {e}")
+
+    def cleanup_old_alerts(self, retention_days: float = 0.125):
+        """
+        Delete 'alerts' older than retention_days.
+        Default is 0.125 days (3 hours).
+        Incidents are preserved.
+        """
+        try:
+            cutoff_ts = datetime.utcnow().timestamp() - (retention_days * 86400)
+            
+            # Clean Alerts DB
+            try:
+                conn_alerts = sqlite3.connect(self.alerts_db_path)
+                cursor_alerts = conn_alerts.cursor()
+                cursor_alerts.execute(f"DELETE FROM alerts WHERE timestamp < ?", (cutoff_ts,))
+                deleted_alerts = cursor_alerts.rowcount
+                conn_alerts.commit()
+                cursor_alerts.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+                conn_alerts.close()
+                if deleted_alerts > 0:
+                    logger.info(f"Alerts cleanup completed. Deleted alerts: {deleted_alerts}")
+            except Exception as e:
+                logger.error(f"Failed to cleanup alerts db: {e}")
+            
+        except Exception as e:
+            logger.error(f"Failed to run alerts cleanup: {e}")
+
+    def vacuum_logs_db(self):
+        """
+        Run VACUUM on logs.db to reclaim physical space.
+        This operation can be slow and may lock the database.
+        """
+        try:
+            logger.info(f"Starting VACUUM on {self.logs_db_path}...")
+            start_time = datetime.now()
+            conn_logs = sqlite3.connect(self.logs_db_path)
+            conn_logs.execute("VACUUM;")
+            conn_logs.close()
+            duration = (datetime.now() - start_time).total_seconds()
+            logger.info(f"VACUUM completed on {self.logs_db_path} in {duration:.2f}s")
+        except Exception as e:
+            logger.error(f"Failed to vacuum logs db: {e}")
 
 # Global instance
 # Ensure the data directory exists

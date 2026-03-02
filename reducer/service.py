@@ -16,8 +16,12 @@ WINDOW_SECONDS = int(os.getenv("REDUCER_WINDOW_SECONDS", "300"))
 SIMILARITY_THRESHOLD = float(os.getenv("REDUCER_SIMILARITY", "0.6"))
 THREAT_THRESHOLD = float(os.getenv("REDUCER_THREAT_THRESHOLD", "60.0"))
 MAX_PER_CLUSTER = int(os.getenv("REDUCER_MAX_PER_CLUSTER", "1"))
-# Default retention: 0.25 days = 6 hours
-RETENTION_DAYS = float(os.getenv("RETENTION_DAYS", "0.25"))
+# Default retention: 0.5 hours
+RETENTION_DAYS = float(os.getenv("RETENTION_DAYS", str(0.5 / 24)))
+CLEANUP_INTERVAL = int(os.getenv("CLEANUP_INTERVAL", "3600")) # 1 hour
+VACUUM_INTERVAL = int(os.getenv("VACUUM_INTERVAL", "86400")) # 24 hours
+ALERTS_RETENTION_DAYS = float(os.getenv("ALERTS_RETENTION_DAYS", str(3.0 / 24))) # 3 hours
+ALERTS_CLEANUP_INTERVAL = int(os.getenv("ALERTS_CLEANUP_INTERVAL", "86400")) # 24 hours
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("ReducerService")
@@ -174,17 +178,32 @@ def main():
     time.sleep(60)
     
     last_cleanup_ts = 0
+    last_vacuum_ts = 0
+    last_alerts_cleanup_ts = 0
     
     while True:
         try:
-            # 1. Run Data Cleanup if needed (once every 24h)
             now = time.time()
-            if now - last_cleanup_ts > 86400:
-                logger.info(f"Running daily data cleanup (retention={RETENTION_DAYS} days)...")
-                log_storage.cleanup_old_data(retention_days=RETENTION_DAYS)
-                last_cleanup_ts = now
+            
+            # # 1. Run Data Cleanup (DELETE)
+            # if now - last_cleanup_ts > CLEANUP_INTERVAL:
+            #     logger.info(f"Running data cleanup (retention={RETENTION_DAYS:.4f} days)...")
+            #     log_storage.cleanup_old_data(retention_days=RETENTION_DAYS)
+            #     last_cleanup_ts = now
+                
+            # # 2. Run Data Vacuum (VACUUM)
+            # if now - last_vacuum_ts > VACUUM_INTERVAL:
+            #     logger.info("Running daily data vacuum...")
+            #     log_storage.vacuum_logs_db()
+            #     last_vacuum_ts = now
 
-            # 2. Run Reducer Cycle
+            # 3. Run Alerts Cleanup (DELETE)
+            if now - last_alerts_cleanup_ts > ALERTS_CLEANUP_INTERVAL:
+                logger.info(f"Running alerts cleanup (retention={ALERTS_RETENTION_DAYS:.4f} days)...")
+                log_storage.cleanup_old_alerts(retention_days=ALERTS_RETENTION_DAYS)
+                last_alerts_cleanup_ts = now
+
+            # 4. Run Reducer Cycle
             run_once()
         except Exception as e:
             logger.error(f"Reducer cycle failed: {e}")

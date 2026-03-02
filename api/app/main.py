@@ -2,7 +2,7 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import os
-from api.app.routers import containers, alerts, overview, hbt, stream, incidents, incidents_container, config
+from api.app.routers import containers, alerts, overview, hbt, stream, incidents, incidents_container, config, logs
 
 APP_PREFIX = "/infrasecurity"
 ACCESS_CONTROL_ENABLED = os.getenv("ACCESS_CONTROL_ENABLED", "1").lower() not in {"0", "false", "no"}
@@ -34,6 +34,7 @@ app.include_router(stream.router, prefix="/api/stream", tags=["stream"])
 app.include_router(incidents.router, prefix="/api/incidents", tags=["incidents"])
 app.include_router(incidents_container.router, prefix="/api/containers/{id}/incidents", tags=["incidents"])
 app.include_router(config.router, prefix="/api/config", tags=["config"])
+app.include_router(logs.router, prefix="/api/logs", tags=["logs"])
 
 app.include_router(containers.router, prefix=f"{APP_PREFIX}/api/containers", tags=["containers"])
 app.include_router(alerts.router, prefix=f"{APP_PREFIX}/api/containers/{{id}}/alerts", tags=["alerts"])
@@ -43,6 +44,7 @@ app.include_router(stream.router, prefix=f"{APP_PREFIX}/api/stream", tags=["stre
 app.include_router(incidents.router, prefix=f"{APP_PREFIX}/api/incidents", tags=["incidents"])
 app.include_router(incidents_container.router, prefix=f"{APP_PREFIX}/api/containers/{{id}}/incidents", tags=["incidents"])
 app.include_router(config.router, prefix=f"{APP_PREFIX}/api/config", tags=["config"])
+app.include_router(logs.router, prefix=f"{APP_PREFIX}/api/logs", tags=["logs"])
 
 @app.get("/healthz")
 @app.get(f"{APP_PREFIX}/healthz")
@@ -59,7 +61,10 @@ async def verify_token(token: str | None = Query(default=None)):
     if not token:
         return {"success": False, "error": "缺少 token"}
 
-    verify_url = "https://www.ideas.cnpc/api/common/v1/users/current?appCode=gx06hustinfrasecurity"
+    verify_url = os.getenv(
+        "VERIFY_TOKEN_URL",
+        "https://www.ideas.cnpc/api/common/v1/users/current?appCode=gx06hustinfrasecurity",
+    )
 
     try:
         async with httpx.AsyncClient(timeout=10.0, verify=False) as client:

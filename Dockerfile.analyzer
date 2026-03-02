@@ -1,10 +1,25 @@
+# Stage 1: Builder
+FROM python:3.14-slim AS builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY analyzer/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Stage 2: Runner
 FROM python:3.14-slim
 
 WORKDIR /app
 
-# Install runtime deps
-COPY analyzer/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY analyzer/ analyzer/
 COPY api/ api/

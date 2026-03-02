@@ -44,7 +44,7 @@ services:
       - DATA_DIR=/app/data
       - PYTHONUNBUFFERED=1
       - LOG_STORAGE_DEBUG=1
-      - ALERTS_INGESTOR_URL=http://alerts-ingestor:9000
+      - ALERTS_INGESTOR_URL=http://43039infrasecurity-alerts-ingestor:9000
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - shared_data:/app/data
@@ -63,6 +63,7 @@ services:
       - HBT_STORAGE_PATH=/app/data/hbt
       - DATA_DIR=/app/data
       - ACCESS_CONTROL_ENABLED=${ACCESS_CONTROL_ENABLED:-0}
+      - VERIFY_TOKEN_URL=${VERIFY_TOKEN_URL:-https://www.ideas.cnpc/api/common/v1/users/current?appCode=gx06hustinfrasecurity}
     volumes:
       - shared_data:/app/data
     depends_on:
@@ -86,6 +87,13 @@ services:
       context: .
       dockerfile: Dockerfile.prometheus
     container_name: 43039infrasecurity-prometheus
+    # Set retention to 3 days to match the project's lightweight storage policy
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+      - --storage.tsdb.retention.time=3d
     depends_on:
       - exporter
 
@@ -130,7 +138,7 @@ services:
     container_name: 43039infrasecurity-reducer
     command: python reducer/service.py
     environment:
-      - PROMETHEUS_URL=http://prometheus:9090
+      - PROMETHEUS_URL=http://43039infrasecurity-prometheus:9090
       - DATA_DIR=/app/data
       - REDUCER_INTERVAL_SECONDS=270
       - REDUCER_WINDOW_SECONDS=300
@@ -161,18 +169,6 @@ services:
       - shared_data:/app/data
     depends_on:
       - logs-ingestor
-
-  # 7. Grafana (Optional Visualization)
-  # grafana:
-  #   image: grafana/grafana-oss:latest
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - prometheus
-  #   environment:
-  #     - GF_SECURITY_ADMIN_PASSWORD=admin
-  #   volumes:
-  #     - ./grafana:/var/lib/grafana/dashboards
 
 volumes:
   shared_data:

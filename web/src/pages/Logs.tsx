@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Table, Tag, Select, Space, Alert, Empty, Spin, Typography, Drawer, Descriptions } from 'antd';
-import { FileTextOutlined } from '@ant-design/icons';
+import { Card, Table, Tag, Select, Space, Empty, Typography, Drawer, Descriptions } from 'antd';
+import { FileTextOutlined, ThunderboltOutlined, DisconnectOutlined } from '@ant-design/icons';
 import { api } from '../api/client';
 import type { ColumnsType } from 'antd/es/table';
 import { LogEvent } from '../api/types';
@@ -28,6 +28,12 @@ const Logs: React.FC = () => {
   const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [selectedLog, setSelectedLog] = useState<LogEvent | null>(null);
+  
+  // WebSocket State
+  const [logs, setLogs] = useState<LogEvent[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const MAX_LOGS = 100;
 
   // Auto-select first container
   useEffect(() => {
@@ -36,21 +42,106 @@ const Logs: React.FC = () => {
     }
   }, [containers, selectedContainerId]);
 
-  // 2. Fetch Logs for selected container
-  const { 
-    data: logsData, 
-    isLoading, 
-    error 
-  } = useQuery({
-    queryKey: ['logs', selectedContainerId],
-    queryFn: () => selectedContainerId 
-      ? api.getContainerLogs(selectedContainerId) 
-      : Promise.reject('No container selected'),
-    enabled: !!selectedContainerId,
-    // Polling is disabled for now as historical logs might not change frequently 
-    // without a real storage backend or real-time stream.
-    refetchInterval: 5000 
-  });
+  // WebSocket Connection
+  useEffect(() => {
+    if (!selectedContainerId) return;
+
+    // Close existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
+    setLogs([]); // Clear logs on switch
+    
+    // Determine WS URL
+    // Better to use relative path if proxy is set up, or configurable base URL
+    const baseUrl = api.baseURL || 'http://localhost:8000';
+    // Remove /api from baseUrl if it exists, as wsUrl adds /api/logs/ws/...
+    // Wait, api.baseURL is like "/infrasecurity/api" or "/api".
+    // Our WebSocket endpoint is at /api/logs/ws/{container_id}.
+    // If api.baseURL includes /api, we should be careful not to double it.
+    // Let's check api/client.ts:
+    // const apiPrefix = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+    // const API_BASE = `${apiPrefix}/api`;
+    // So API_BASE is e.g. "/api".
+    
+    // The WS endpoint is defined in api/app/routers/logs.py as @router.websocket("/ws/{container_id}")
+    // And mounted in api/app/main.py as app.include_router(logs.router, prefix="/api/logs", ...)
+    // So the full path is /api/logs/ws/{container_id} (relative to API root).
+    
+    // If we are proxying, we need to respect that.
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    
+    // Construct WS URL. 
+    // If API_BASE is absolute (http://...), replace protocol.
+    // If API_BASE is relative (/api...), append to host.
+    
+    let wsUrl = '';
+    if (baseUrl.startsWith('http')) {
+        wsUrl = baseUrl.replace(/^http/, 'ws');
+    } else {
+        wsUrl = `${wsProtocol}//${window.location.host}${baseUrl}`;
+    }
+    
+    // Now append the endpoint path. 
+    // API_BASE already includes /api. 
+    // The router is mounted at /logs.
+    // So we append /logs/ws/{id}.
+    wsUrl = `${wsUrl}/logs/ws/${selectedContainerId}`;
+
+    console.log(`Connecting to WebSocket: ${wsUrl}`);
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('WebSocket Connected');
+      setIsConnected(true);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const logData = JSON.parse(event.data);
+        // Adapt format if necessary. Backend sends raw dict.
+        // Frontend expects: timestamp (iso string), priority, rule, source, output, tags
+        const newLog: LogEvent = {
+          timestamp: new Date(logData.timestamp * 1000).toISOString(),
+          rule: logData.rule,
+          priority: logData.priority,
+          source: logData.source,
+          output: logData.output, // output is already JSON string in backend
+          tags: JSON.parse(logData.tags || '[]')
+        };
+
+        setLogs(prev => {
+          const updated = [newLog, ...prev];
+          if (updated.length > MAX_LOGS) {
+            return updated.slice(0, MAX_LOGS);
+          }
+          return updated;
+        });
+      } catch (err) {
+        console.error('Error parsing log message:', err);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket Disconnected');
+      setIsConnected(false);
+    };
+
+    ws.onerror = (err) => {
+      console.error('WebSocket Error:', err);
+      setIsConnected(false);
+    };
+
+    wsRef.current = ws;
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [selectedContainerId]);
+
 
   const columns: ColumnsType<LogEvent> = [
     {
@@ -126,6 +217,11 @@ const Logs: React.FC = () => {
                 <Option key={c.id} value={c.id}>{c.name}</Option>
               ))}
             </Select>
+            {isConnected ? (
+                <Tag icon={<ThunderboltOutlined />} color="success">Live Streaming</Tag>
+            ) : (
+                <Tag icon={<DisconnectOutlined />} color="error">Disconnected</Tag>
+            )}
           </Space>
         </Card>
 
@@ -134,51 +230,25 @@ const Logs: React.FC = () => {
           title={
             <Space>
               <FileTextOutlined />
-              <span>Security Events Log</span>
+              <span>Security Events Log (Real-time Buffer: {logs.length}/{MAX_LOGS})</span>
             </Space>
           }
         >
-          {error && (
-             <Alert 
-               message="Error loading logs" 
-               description="Could not fetch logs. Ensure backend service is running." 
-               type="error" 
-               showIcon 
-               style={{ marginBottom: 16 }}
-             />
-          )}
-
-          {logsData?.warning && (
-            <Alert
-                message="Note"
-                description={logsData.warning}
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-            />
-          )}
-
-          {isLoading ? (
-            <div style={{ textAlign: 'center', padding: 40 }}>
-              <Spin size="large" tip="Loading logs..." />
-            </div>
-          ) : (
-            <Table 
-              dataSource={logsData?.logs || []} 
-              columns={columns} 
-              rowKey={(record, index) => `${record.timestamp}-${index}`}
-              pagination={{ pageSize: 20 }}
-              scroll={{ x: 1000 }}
-              locale={{ emptyText: 'No logs available for this container' }}
-              onRow={(record) => ({
-                onClick: () => {
-                  setSelectedLog(record);
-                  setDrawerVisible(true);
-                },
-                style: { cursor: 'pointer' }
-              })}
-            />
-          )}
+          <Table 
+            dataSource={logs} 
+            columns={columns} 
+            rowKey={(record, index) => `${record.timestamp}-${index}`}
+            pagination={{ pageSize: 20 }}
+            scroll={{ x: 1000 }}
+            locale={{ emptyText: isConnected ? 'Waiting for events...' : 'No logs (disconnected)' }}
+            onRow={(record) => ({
+              onClick: () => {
+                setSelectedLog(record);
+                setDrawerVisible(true);
+              },
+              style: { cursor: 'pointer' }
+            })}
+          />
         </Card>
 
         <Drawer
