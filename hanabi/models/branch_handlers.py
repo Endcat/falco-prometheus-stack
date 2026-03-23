@@ -142,7 +142,7 @@ class ProcessBranchHandler(BranchHandler):
         if learnState == True:
             update_learn_state(eventCounter)
 
-# using evt.type, proc.name fd.type and fd.name to match the branch
+# using evt.type, proc.name, fd.type, fd.name to match the branch
 class NetworkBranchHandler(BranchHandler):
     """网络分支处理器"""
     
@@ -222,7 +222,7 @@ class NetworkBranchHandler(BranchHandler):
         if learnState == True:
             update_learn_state(eventCounter)
 
-# using evt.type, proc.name and fd.directory to match the branch
+# using evt.type, proc.name fd.directory, fd.filename to match the branch
 class FileBranchHandler(BranchHandler):
     """文件分支处理器"""
     
@@ -248,19 +248,19 @@ class FileBranchHandler(BranchHandler):
                 persist_alert(event, "file", "proc.name not matched", proc_name)
                 return
             directory = event.get("fd.directory", "")
-            # filename = event.get("fd.name", "")
+            filename = event.get("fd.filename", "")
             if directory:
                 dir_key = find_semantic_key(directory, self.root.children[evt_key].children[proc_key].children)
                 if dir_key not in self.root.children[evt_key].children[proc_key].children:
                     print("Warning(T): " + json.dumps(event, ensure_ascii=False)+"\n")
                     persist_alert(event, "file", "directory not matched", directory)
                     return
-            # if filename:
-            #     file_key = find_semantic_key(filename, self.root.children[evt_key].children[proc_key].children)
-            #     if file_key not in self.root.children[evt_key].children[proc_key].children:
-            #         print("Warning(T): " + json.dumps(event, ensure_ascii=False)+"\n")
-            #         persist_alert(event, "file", "filename not matched")
-            #         return
+            if filename:
+                file_key = find_semantic_key(filename, self.root.children[evt_key].children[proc_key].children)
+                if file_key not in self.root.children[evt_key].children[proc_key].children:
+                    print("Warning(T): " + json.dumps(event, ensure_ascii=False)+"\n")
+                    persist_alert(event, "file", "filename not matched", filename)
+                    return
             # 匹配画像放行
             return
         # 获取文件相关信息
@@ -280,7 +280,7 @@ class FileBranchHandler(BranchHandler):
             proc_key = proc_name
         # 获取Attribute Token Bag级别的节点，在文件中就是directory和filename
         directory = event.get("fd.directory", "")
-        # filename = event.get("fd.filename", "")
+        filename = event.get("fd.filename", "")
         if directory:
             dir_key = find_semantic_key(directory, self.root.children[evt_key].children[proc_key].children)
             if dir_key not in self.root.children[evt_key].children[proc_key].children:
@@ -289,14 +289,14 @@ class FileBranchHandler(BranchHandler):
                 self.root.children[evt_key].children[proc_key].add_child(directory, "directory_path")
                 dir_key = directory
             self.root.children[evt_key].children[proc_key].children[dir_key].events_count += 1
-        # if filename:
-        #     file_key = find_semantic_key(filename, self.root.children[evt_key].children[proc_key].children)
-        #     if file_key not in self.root.children[evt_key].children[proc_key].children:
-        #         eventCounter.on_event()
-        #         print("Warning(F): " + json.dumps(event, ensure_ascii=False)+"\n")
-        #         self.root.children[evt_key].children[proc_key].add_child(filename, "file_name")
-        #         file_key = filename
-        #     self.root.children[evt_key].children[proc_key].children[file_key].events_count += 1
+        if filename:
+            file_key = find_semantic_key(filename, self.root.children[evt_key].children[proc_key].children)
+            if file_key not in self.root.children[evt_key].children[proc_key].children:
+                eventCounter.on_event()
+                print("Warning(F): " + json.dumps(event, ensure_ascii=False)+"\n")
+                self.root.children[evt_key].children[proc_key].add_child(filename, "file_name")
+                file_key = filename
+            self.root.children[evt_key].children[proc_key].children[file_key].events_count += 1
 
         if learnState == True:
             update_learn_state(eventCounter)
