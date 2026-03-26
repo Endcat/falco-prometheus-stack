@@ -37,6 +37,7 @@ const Alerts: React.FC = () => {
     { title: 'Time', dataIndex: 'timestamp', key: 'timestamp', render: (ts) => new Date(ts).toLocaleString() },
     { title: 'Category', dataIndex: 'category', key: 'category' },
     { title: 'Reason', dataIndex: 'reason', key: 'reason' },
+    { title: 'Attribute Value', dataIndex: 'attribute_value', key: 'attribute_value' },
     { title: 'Event Type', dataIndex: 'evt_type', key: 'evt_type' },
     { title: 'Process', dataIndex: 'proc_name', key: 'proc_name' },
     { title: 'FD Name', dataIndex: 'fd_name', key: 'fd_name' },
@@ -164,6 +165,7 @@ const Alerts: React.FC = () => {
               <Descriptions.Item label="Time">{new Date(selectedAlert.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</Descriptions.Item>
               <Descriptions.Item label="Category">{selectedAlert.category}</Descriptions.Item>
               <Descriptions.Item label="Reason">{selectedAlert.reason}</Descriptions.Item>
+              <Descriptions.Item label="Attribute Value">{selectedAlert.attribute_value}</Descriptions.Item>
               <Descriptions.Item label="Event Type">{selectedAlert.evt_type}</Descriptions.Item>
               <Descriptions.Item label="Process">{selectedAlert.proc_name}</Descriptions.Item>
               <Descriptions.Item label="FD Name">{selectedAlert.fd_name}</Descriptions.Item>

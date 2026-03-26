@@ -255,49 +255,79 @@ class LogStorage:
             return []
 
 
+    def _prepare_alert_tuple(self, output_fields: Dict[str, Any], category: str, reason: str, attribute_value: str = ""):
+        container_id = (
+            output_fields.get('container.name')
+            or output_fields.get('container.id')
+            or output_fields.get('k8s.pod.name')
+            or 'unknown'
+        )
+        container_id = str(container_id)
+
+        ts_val = output_fields.get('evt.time') or output_fields.get('evt.time.iso8601')
+        if isinstance(ts_val, str):
+            try:
+                dt = datetime.fromisoformat(ts_val.replace('Z', '+00:00'))
+                timestamp = dt.timestamp()
+            except:
+                timestamp = datetime.utcnow().timestamp()
+        elif isinstance(ts_val, (int, float)):
+            timestamp = ts_val if ts_val < 1e11 else ts_val / 1e9
+        else:
+            timestamp = datetime.utcnow().timestamp()
+
+        priority = 'Warning'
+        evt_type = output_fields.get('evt.type', '')
+        proc_name = output_fields.get('proc.name', '')
+        fd_name = output_fields.get('fd.name', '')
+        output = json.dumps(output_fields, ensure_ascii=False)
+
+        return (container_id, timestamp, category, priority, reason, evt_type, proc_name, fd_name, output, attribute_value)
+
     def add_alert(self, output_fields: Dict[str, Any], category: str, reason: str, attribute_value: str = ""):
         try:
-            container_id = (
-                output_fields.get('container.name')
-                or output_fields.get('container.id')
-                or output_fields.get('k8s.pod.name')
-                or 'unknown'
-            )
-            container_id = str(container_id)
-
-            ts_val = output_fields.get('evt.time') or output_fields.get('evt.time.iso8601')
-            if isinstance(ts_val, str):
-                try:
-                    dt = datetime.fromisoformat(ts_val.replace('Z', '+00:00'))
-                    timestamp = dt.timestamp()
-                except:
-                    timestamp = datetime.utcnow().timestamp()
-            elif isinstance(ts_val, (int, float)):
-                timestamp = ts_val if ts_val < 1e11 else ts_val / 1e9
-            else:
-                timestamp = datetime.utcnow().timestamp()
-
-            priority = 'Warning'
-            evt_type = output_fields.get('evt.type', '')
-            proc_name = output_fields.get('proc.name', '')
-            fd_name = output_fields.get('fd.name', '')
-            output = json.dumps(output_fields, ensure_ascii=False)
-
+            val = self._prepare_alert_tuple(output_fields, category, reason, attribute_value)
             conn = sqlite3.connect(self.alerts_db_path)
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO alerts (container_id, timestamp, category, priority, reason, evt_type, proc_name, fd_name, output, attribute_value)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (container_id, timestamp, category, priority, reason, evt_type, proc_name, fd_name, output, attribute_value))
+            ''', val)
             conn.commit()
             conn.close()
             if LOG_STORAGE_DEBUG:
                 try:
-                    logger.info(f"Alert stored container_id={container_id} category={category} reason={reason}")
+                    logger.info(f"Alert stored container_id={val[0]} category={category} reason={reason}")
                 except Exception:
                     pass
         except Exception as e:
             logger.error(f"Failed to add alert to storage: {e}")
+
+    def add_alerts_batch(self, alerts_list: List[Dict[str, Any]]):
+        if not alerts_list:
+            return
+        try:
+            vals = [
+                self._prepare_alert_tuple(
+                    item.get("output_fields", {}),
+                    item.get("category", "unknown"),
+                    item.get("reason", ""),
+                    item.get("attribute_value", "")
+                )
+                for item in alerts_list
+            ]
+            conn = sqlite3.connect(self.alerts_db_path)
+            cursor = conn.cursor()
+            cursor.executemany('''
+                INSERT INTO alerts (container_id, timestamp, category, priority, reason, evt_type, proc_name, fd_name, output, attribute_value)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', vals)
+            conn.commit()
+            conn.close()
+            if LOG_STORAGE_DEBUG:
+                logger.info(f"Batch inserted {len(alerts_list)} alerts to {self.alerts_db_path}")
+        except Exception as e:
+            logger.error(f"Failed to add alerts batch to storage: {e}")
 
     def add_incident(
         self,
